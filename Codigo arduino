@@ -1,0 +1,59 @@
+// ===== PINES =====
+const int P1 = 2, P2 = 4, P3 = 7;
+const int LED1 = 10, LED2 = 11;
+
+// ===== VARIABLES =====
+int brilloLED1 = 0, brilloLED2 = 0;
+bool usarLED1 = true;
+bool modoMax = false;
+unsigned long t1 = 0, t2 = 0, t3 = 0;
+const int DEBOUNCE = 50;
+
+// ===== SETUP =====
+void setup() {
+  pinMode(P1, INPUT_PULLUP);
+  pinMode(P2, INPUT_PULLUP);
+  pinMode(P3, INPUT_PULLUP);
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  analogWrite(LED1, 0);
+  analogWrite(LED2, 0);
+}
+
+// ===== LOOP =====
+void loop() {
+  // PULSADOR 1: Incrementar brillo
+  if (digitalRead(P1) == LOW && millis() - t1 > DEBOUNCE) {
+    t1 = millis();
+    int &brillo = usarLED1 ? brilloLED1 : brilloLED2;
+    int led = usarLED1 ? LED1 : LED2;
+    
+    brillo += 50;
+    if (brillo > 255) brillo = 0;
+    analogWrite(led, brillo);
+    modoMax = false;
+  }
+  
+  // PULSADOR 2: Máximo o decrementar
+  if (digitalRead(P2) == LOW && millis() - t2 > DEBOUNCE) {
+    t2 = millis();
+    int &brillo = usarLED1 ? brilloLED1 : brilloLED2;
+    int led = usarLED1 ? LED1 : LED2;
+    
+    if (!modoMax) {
+      brillo = 255;
+      modoMax = true;
+    } else {
+      brillo -= 50;
+      if (brillo < 0) brillo = 0;
+    }
+    analogWrite(led, brillo);
+  }
+  
+  // PULSADOR 3: Cambiar LED
+  if (digitalRead(P3) == LOW && millis() - t3 > DEBOUNCE) {
+    t3 = millis();
+    usarLED1 = !usarLED1;
+    modoMax = false;
+  }
+}
