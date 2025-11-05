@@ -1,0 +1,218 @@
+import processing.serial.*;
+
+// ===== CONFIGURACIÓN SERIAL =====
+Serial puerto;
+String puertoArduino = "COM3"; // CAMBIAR según tu puerto
+int baudRate = 9600;
+
+// ===== ESTADOS =====
+boolean p1Estado = false, p2Estado = false, p3Estado = false;
+boolean led1Estado = false, led2Estado = false;
+int brilloLED1 = 0, brilloLED2 = 0;
+boolean ledActivo = true; // true=LED1, false=LED2
+
+// ===== COLORES =====
+color ALTO = color(0, 255, 0);      // Verde
+color BAJO = color(255, 0, 0);       // Rojo
+color LED_ON = color(255, 255, 0);   // Amarillo
+color LED_OFF = color(100);          // Gris oscuro
+color FONDO = color(40);
+color TEXTO = color(255);
+
+// ===== SETUP =====
+void setup() {
+  size(800, 600);
+  
+  // Conectar con Arduino
+  println("Puertos disponibles:");
+  printArray(Serial.list());
+  
+  try {
+    puerto = new Serial(this, puertoArduino, baudRate);
+    puerto.bufferUntil('\n');
+    println("Conectado a: " + puertoArduino);
+  } catch (Exception e) {
+    println("Error al conectar. Verifica el puerto.");
+  }
+  
+  textAlign(CENTER, CENTER);
+}
+
+// ===== DRAW =====
+void draw() {
+  background(FONDO);
+  
+  // Título
+  fill(TEXTO);
+  textSize(28);
+  text("CONTROL ARDUINO - E/S", width/2, 40);
+  
+  // ===== SECCIÓN ENTRADAS =====
+  fill(TEXTO);
+  textSize(20);
+  text("ENTRADAS", 200, 100);
+  
+  // Pulsadores
+  dibujarPulsador(100, 150, "P1", p1Estado);
+  dibujarPulsador(200, 150, "P2", p2Estado);
+  dibujarPulsador(300, 150, "P3", p3Estado);
+  
+  // ===== SECCIÓN SALIDAS =====
+  fill(TEXTO);
+  textSize(20);
+  text("SALIDAS", 600, 100);
+  
+  // LEDs
+  dibujarLED(550, 150, "LED1", led1Estado, brilloLED1, ledActivo);
+  dibujarLED(650, 150, "LED2", led2Estado, brilloLED2, !ledActivo);
+  
+  // ===== INFORMACIÓN =====
+  fill(TEXTO);
+  textSize(16);
+  textAlign(LEFT);
+  text("LED Activo: " + (ledActivo ? "LED1" : "LED2"), 50, 350);
+  text("Brillo LED1: " + brilloLED1, 50, 380);
+  text("Brillo LED2: " + brilloLED2, 50, 410);
+  
+  // Instrucciones
+  textSize(14);
+  text("CONTROLES:", 50, 470);
+  text("Click P1: Incrementar brillo +50", 50, 495);
+  text("Click P2: Máximo (1ra vez) / Decrementar -50", 50, 515);
+  text("Click P3: Cambiar LED activo", 50, 535);
+  text("Teclas: Q=P1, W=P2, E=P3", 50, 555);
+  
+  textAlign(CENTER, CENTER);
+}
+
+// ===== DIBUJAR PULSADOR =====
+void dibujarPulsador(float x, float y, String label, boolean estado) {
+  // Círculo del pulsador
+  fill(estado ? ALTO : BAJO);
+  stroke(255);
+  strokeWeight(3);
+  circle(x, y, 60);
+  
+  // Etiqueta
+  fill(0);
+  textSize(18);
+  text(label, x, y);
+  
+  // Estado texto
+  fill(TEXTO);
+  textSize(12);
+  text(estado ? "ALTO" : "BAJO", x, y + 50);
+}
+
+// ===== DIBUJAR LED =====
+void dibujarLED(float x, float y, String label, boolean encendido, int brillo, boolean activo) {
+  // LED
+  fill(encendido ? LED_ON : LED_OFF);
+  if (encendido) {
+    // Efecto de brillo
+    int alpha = map(brillo, 0, 255, 50, 255);
+    fill(255, 255, 0, alpha);
+  }
+  stroke(255);
+  strokeWeight(3);
+  circle(x, y, 60);
+  
+  // Indicador de LED activo
+  if (activo) {
+    noFill();
+    stroke(0, 255, 255);
+    strokeWeight(4);
+    circle(x, y, 75);
+  }
+  
+  // Etiqueta
+  fill(0);
+  textSize(16);
+  text(label, x, y);
+  
+  // Brillo
+  fill(TEXTO);
+  textSize(12);
+  text("Brillo: " + brillo, x, y + 50);
+}
+
+// ===== EVENTO SERIAL =====
+void serialEvent(Serial p) {
+  String data = p.readStringUntil('\n');
+  if (data != null) {
+    data = trim(data);
+    procesarDatos(data);
+  }
+}
+
+// ===== PROCESAR DATOS =====
+void procesarDatos(String data) {
+  // Formato esperado: "P1:0,P2:1,P3:0,LED1:150,LED2:0,ACTIVO:1"
+  String[] partes = split(data, ',');
+  
+  for (String parte : partes) {
+    String[] valores = split(parte, ':');
+    if (valores.length == 2) {
+      String clave = valores[0];
+      int valor = int(valores[1]);
+      
+      switch(clave) {
+        case "P1":
+          p1Estado = (valor == 1);
+          break;
+        case "P2":
+          p2Estado = (valor == 1);
+          break;
+        case "P3":
+          p3Estado = (valor == 1);
+          break;
+        case "LED1":
+          brilloLED1 = valor;
+          led1Estado = (valor > 0);
+          break;
+        case "LED2":
+          brilloLED2 = valor;
+          led2Estado = (valor > 0);
+          break;
+        case "ACTIVO":
+          ledActivo = (valor == 1);
+          break;
+      }
+    }
+  }
+}
+
+// ===== EVENTOS MOUSE =====
+void mousePressed() {
+  // Detectar click en pulsadores
+  if (dist(mouseX, mouseY, 100, 150) < 30) {
+    enviarComando("P1");
+  }
+  else if (dist(mouseX, mouseY, 200, 150) < 30) {
+    enviarComando("P2");
+  }
+  else if (dist(mouseX, mouseY, 300, 150) < 30) {
+    enviarComando("P3");
+  }
+}
+
+// ===== EVENTOS TECLADO =====
+void keyPressed() {
+  if (key == 'q' || key == 'Q') {
+    enviarComando("P1");
+  }
+  else if (key == 'w' || key == 'W') {
+    enviarComando("P2");
+  }
+  else if (key == 'e' || key == 'E') {
+    enviarComando("P3");
+  }
+}
+
+// ===== ENVIAR COMANDO =====
+void enviarComando(String comando) {
+  if (puerto != null) {
+    puerto.write(comando + "\n");
+    println("Enviado: " + comando);
+  }
+}
