@@ -8,9 +8,12 @@ bool usarLED1 = true;
 bool modoMax = false;
 unsigned long t1 = 0, t2 = 0, t3 = 0;
 const int DEBOUNCE = 50;
+unsigned long tEnvio = 0;
+const int INTERVALO_ENVIO = 100; // Enviar datos cada 100ms
 
 // ===== SETUP =====
 void setup() {
+  Serial.begin(9600);
   pinMode(P1, INPUT_PULLUP);
   pinMode(P2, INPUT_PULLUP);
   pinMode(P3, INPUT_PULLUP);
@@ -22,38 +25,116 @@ void setup() {
 
 // ===== LOOP =====
 void loop() {
+  // Leer pulsadores físicos
+  leerPulsadores();
+  
+  // Leer comandos desde Processing
+  if (Serial.available() > 0) {
+    String comando = Serial.readStringUntil('\n');
+    comando.trim();
+    procesarComando(comando);
+  }
+  
+  // Enviar estado a Processing
+  if (millis() - tEnvio > INTERVALO_ENVIO) {
+    tEnvio = millis();
+    enviarEstado();
+  }
+}
+
+// ===== LEER PULSADORES FÍSICOS =====
+void leerPulsadores() {
   // PULSADOR 1: Incrementar brillo
   if (digitalRead(P1) == LOW && millis() - t1 > DEBOUNCE) {
     t1 = millis();
-    int &brillo = usarLED1 ? brilloLED1 : brilloLED2;
-    int led = usarLED1 ? LED1 : LED2;
-    
-    brillo += 50;
-    if (brillo > 255) brillo = 0;
-    analogWrite(led, brillo);
-    modoMax = false;
+    pulsadorP1();
   }
   
   // PULSADOR 2: Máximo o decrementar
   if (digitalRead(P2) == LOW && millis() - t2 > DEBOUNCE) {
     t2 = millis();
-    int &brillo = usarLED1 ? brilloLED1 : brilloLED2;
-    int led = usarLED1 ? LED1 : LED2;
-    
-    if (!modoMax) {
-      brillo = 255;
-      modoMax = true;
-    } else {
-      brillo -= 50;
-      if (brillo < 0) brillo = 0;
-    }
-    analogWrite(led, brillo);
+    pulsadorP2();
   }
   
   // PULSADOR 3: Cambiar LED
   if (digitalRead(P3) == LOW && millis() - t3 > DEBOUNCE) {
     t3 = millis();
-    usarLED1 = !usarLED1;
-    modoMax = false;
+    pulsadorP3();
   }
 }
+
+// ===== PROCESAR COMANDOS =====
+void procesarComando(String comando) {
+  if (comando == "P1") {
+    pulsadorP1();
+  }
+  else if (comando == "P2") {
+    pulsadorP2();
+  }
+  else if (comando == "P3") {
+    pulsadorP3();
+  }
+}
+
+// ===== FUNCIONES DE PULSADORES =====
+void pulsadorP1() {
+  int &brillo = usarLED1 ? brilloLED1 : brilloLED2;
+  int led = usarLED1 ? LED1 : LED2;
+  
+  brillo += 50;
+  if (brillo > 255) brillo = 0;
+  analogWrite(led, brillo);
+  modoMax = false;
+}
+
+void pulsadorP2() {
+  int &brillo = usarLED1 ? brilloLED1 : brilloLED2;
+  int led = usarLED1 ? LED1 : LED2;
+  
+  if (!modoMax) {
+    brillo = 255;
+    modoMax = true;
+  } else {
+    brillo -= 50;
+    if (brillo < 0) brillo = 0;
+  }
+  analogWrite(led, brillo);
+}
+
+void pulsadorP3() {
+  usarLED1 = !usarLED1;
+  modoMax = false;
+}
+
+// ===== ENVIAR ESTADO A PROCESSING =====
+void enviarEstado() {
+  // Formato: P1:estado,P2:estado,P3:estado,LED1:brillo,LED2:brillo,ACTIVO:ledActivo
+  Serial.print("P1:");
+  Serial.print(digitalRead(P1) == LOW ? 1 : 0);
+  Serial.print(",P2:");
+  Serial.print(digitalRead(P2) == LOW ? 1 : 0);
+  Serial.print(",P3:");
+  Serial.print(digitalRead(P3) == LOW ? 1 : 0);
+  Serial.print(",LED1:");
+  Serial.print(brilloLED1);
+  Serial.print(",LED2:");
+  Serial.print(brilloLED2);
+  Serial.print(",ACTIVO:");
+  Serial.println(usarLED1 ? 1 : 2);
+}
+
+// ===== FUNCIONAMIENTO =====
+/*
+ * COMUNICACIÓN BIDIRECCIONAL:
+ * - Arduino envía estado de pulsadores y LEDs cada 100ms
+ * - Processing puede enviar comandos "P1", "P2", "P3" para simular pulsadores
+ * 
+ * CONTROLES:
+ * - P1: Incrementa brillo +50 (0→50→100→150→200→250→0)
+ * - P2: Primera vez=255, luego decrementa -50
+ * - P3: Alterna entre LED1 y LED2
+ * 
+ * CONEXIONES:
+ * - P1→Pin2, P2→Pin4, P3→Pin7 (a GND con pulsador)
+ * - LED1→Pin10, LED2→Pin11 (con resistencia 220Ω)
+ */
